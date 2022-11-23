@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bubliny</title>
+</head>
+
+<body>
+    <canvas id="canvas" width="1600" height="900"></canvas>
+</body>
+<script>
+    const canvas = document.getElementById("canvas")
+    const c = canvas.getContext("2d")
+    const screen = {
+        x: 0,
+        y: 0,
+        x2: 1600,
+        y2: 900
+    }
+    const getColor = angle => "hsl(" + angle + ",100%,50%)"
+    const FRICTION = -0.4
+    const POWER_LOSS = 0.95
+    const ELASTICITY = 0.4
+    const G = 0.08
+    const AIR_RESISTANCE = 0.99
+
+    function distance(p1, p2) {
+        const a = p2.x - p1.x
+        const b = p2.y - p1.y
+        if (a == 0 && b == 0)
+            return {
+                x: 0,
+                y: 0,
+                c: 0,
+                fx: 0,
+                fy: 0
+            }
+        const c = Math.sqrt(a * a + b * b)
+        return {
+            x: a,
+            y: b,
+            c,
+            fx: a / c,
+            fy: b / c
+        }
+    }
+    const avg = {
+        x: 0,
+        y: 0,
+        xs: 0,
+        ys: 0,
+        r: 0
+    }
+
+    function calcStats() {
+        for (let i in avg)
+            avg[i] /= bubbles.length
+    }
+
+    function resetStats() {
+        for (let i in avg)
+            avg[i] = 0
+    }
+
+    function drawStats() {
+        c.strokeStyle = "green"
+        c.lineWidth = 3
+        c.beginPath()
+        c.moveTo(avg.x, screen.y)
+        c.lineTo(avg.x, screen.y2)
+        c.moveTo(screen.x, avg.y)
+        c.lineTo(screen.x2, avg.y)
+        c.stroke()
+        c.strokeStyle = "yellow"
+        c.beginPath()
+        c.moveTo(avg.x, avg.y)
+        c.lineTo(avg.x + avg.xs * 20, avg.y + avg.ys * 20)
+        c.stroke()
+        c.lineWidth = 2
+        c.beginPath()
+        c.arc(avg.x, avg.y, avg.r, Math.PI * 2, 0)
+        c.stroke()
+        c.lineWidth = 1
+        c.fillStyle = "black"
+        c.fillRect(0, 0, 50, 20)
+        c.fillStyle = "green"
+        c.font = "18px arial"
+        c.fillText(bubbles.length, 2, 19)
+        c.fillStyle = "black"
+        c.fillRect(0, avg.y + 2, 50, 20)
+        c.fillStyle = "green"
+        c.font = "18px arial"
+        c.fillText(Math.round(screen.y2 * 10 - avg.y * 10) / 10, 2, avg.y + 19)
+        c.fillStyle = "black"
+        c.fillRect(avg.x + 2, 2, 58, 20)
+        c.fillStyle = "green"
+        c.font = "18px arial"
+        c.fillText(Math.round(avg.x * 10) / 10, avg.x + 3, 19)
+    }
+
+    class Bubble {
+        constructor(x, y, r) {
+            this.r = r
+            this.x = x
+            this.y = y
+            this.xs = Math.random() - 0.5
+            this.ys = Math.random() - 0.5
+        }
+        draw() {
+            c.fillStyle = getColor(this.y)
+            c.beginPath()
+            c.arc(this.x, this.y, this.r, Math.PI * 2, 0)
+            c.fill()
+            if (sh_stats) {
+                c.strokeStyle = "red"
+                c.lineWidth = 2.5
+                c.beginPath()
+                c.moveTo(this.x, this.y)
+                c.lineTo(this.x + this.xs * 3, this.y + this.ys * 3)
+                c.stroke()
+            }
+        }
+        collision() {
+            for (let i in bubbles) {
+                if (bubbles[i] != this) {
+                    const bub = bubbles[i]
+                    const dist = distance(this, bub)
+                    if (dist.c > this.r + bub.r) continue
+                    this.xs -= dist.fx * ELASTICITY * (bub.r / this.r) //* (this.r / Math.max(dist.c - bub.r, .003))
+                    this.ys -= dist.fy * ELASTICITY * (bub.r / this.r) //* (this.r / Math.max(dist.c - bub.r, .003))
+                }
+            }
+        }
+        wallCol() {
+            for (let i in walls) {
+                let w = walls[i]
+                if (!(this.x > w.x - this.r && this.x < w.x + w.w + this.r && this.y > w.y - this.r && this.y < w
+                        .y + w.h + this.r)) continue
+                let upperLeft = distance(this, {
+                    x: w.x,
+                    y: w.y
+                })
+                let upperRight = distance(this, {
+                    x: w.x + w.w,
+                    y: w.y
+                })
+                let bottomLeft = distance(this, {
+                    x: w.x,
+                    y: w.y + w.h
+                })
+                let bottomRight = distance(this, {
+                    x: w.x + w.w,
+                    y: w.y + w.h
+                })
+                if (this.x <= w.x + w.w + this.r && this.y > w.y && this.y < w.y + w.h && this.x >= w.x + w.w /
+                    2) {
+                    //right
+                    this.xs *= FRICTION
+                    this.x = w.x + w.w + this.r
+                    this.ys *= POWER_LOSS
+                    continue
+                } else if (this.x >= w.x - this.r && this.y > w.y && this.y < w.y + w.h && this.x <= w.x + w.w /
+                    2) {
+                    //left
+                    this.xs *= FRICTION
+                    this.x = w.x - this.r
+                    this.ys *= POWER_LOSS
+                    continue
+                }
+                if (this.y >= w.y - this.r && this.x > w.x && this.x < w.x + w.w && this.y <= w.y + w.h / 2) {
+                    //up
+                    this.ys *= FRICTION
+                    this.y = w.y - this.r
+                    this.xs *= POWER_LOSS
+                    continue
+                } else if (this.y <= w.y + w.h + this.r && this.x > w.x && this.x < w.x + w.w && this.y >= w.y + w
+                    .h / 2) {
+                    //down
+                    this.ys *= FRICTION
+                    this.y = w.y + w.h + this.r
+                    this.xs *= POWER_LOSS
+                    continue
+                }
+                if (upperLeft.c < this.r) {
+                    this.xs -= upperLeft.fx * POWER_LOSS
+                    this.ys -= upperLeft.fy * POWER_LOSS
+                }
+                if (upperRight.c < this.r) {
+                    this.xs -= upperRight.fx * POWER_LOSS
+                    this.ys -= upperRight.fy * POWER_LOSS
+                }
+                if (bottomLeft.c < this.r) {
+                    this.xs -= bottomLeft.fx * POWER_LOSS
+                    this.ys -= bottomLeft.fy * POWER_LOSS
+                }
+                if (bottomRight.c < this.r) {
+                    this.xs -= bottomRight.fx * POWER_LOSS
+                    this.ys -= bottomRight.fy * POWER_LOSS
+                }
+            }
+        }
+        border() {
+            if (this.x < screen.x + this.r) {
+                this.xs *= FRICTION
+                this.x = screen.x + this.r
+                this.ys *= POWER_LOSS
+            }
+            if (this.x > screen.x2 - this.r) {
+                this.xs *= FRICTION
+                this.x = screen.x2 - this.r
+                this.ys *= POWER_LOSS
+            }
+            if (this.y < screen.y + this.r) {
+                this.ys *= FRICTION
+                this.y = screen.y + this.r
+                this.xs *= POWER_LOSS
+            }
+            if (this.y > screen.y2 - this.r) {
+                this.ys *= FRICTION
+                this.y = screen.y2 - this.r
+                this.xs *= POWER_LOSS
+            }
+        }
+        gravity() {
+            this.ys += G
+        }
+        move() {
+            this.x += this.xs
+            this.y += this.ys
+            this.xs *= AIR_RESISTANCE
+            this.ys *= AIR_RESISTANCE
+        }
+        statistics() {
+            avg.x += this.x
+            avg.y += this.y
+            avg.xs += this.xs
+            avg.ys += this.ys
+            avg.r += this.r
+        }
+    }
+    let hold = false
+    let bubbles = []
+    let sh_stats = true
+    let keys = {}
+    let walls = []
+
+    function main() {
+        c.fillStyle = "black"
+        c.fillRect(0, 0, 1600, 900)
+
+        for (let i in bubbles) {
+            bubbles[i].statistics()
+            bubbles[i].gravity()
+            bubbles[i].collision()
+            bubbles[i].wallCol()
+            bubbles[i].border()
+        }
+        for (let i in bubbles) {
+            bubbles[i].move()
+            bubbles[i].draw()
+        }
+        for (let i in walls) {
+            c.fillStyle = "gray"
+            c.fillRect(walls[i].x, walls[i].y, walls[i].w, walls[i].h)
+        }
+
+        if (bubbles.length > 0 && sh_stats) {
+            calcStats()
+            drawStats()
+            resetStats()
+        }
+        requestAnimationFrame(main)
+    }
+    main()
+
+    addEventListener("mousedown", e => {
+        hold = true
+        if(!keys.KeyW)
+            bubbles.push(new Bubble(e.offsetX, e.offsetY, /*Math.random() * 10 + 10*/ 20))
+        else{
+            walls.push({x:e.offsetX, y:e.offsetY, w:1,h:1, done: false})
+        }
+    })
+    addEventListener("mousemove", e => {
+        if (!hold) return
+        if(!keys.KeyW && !keys.KeyD)
+            bubbles.push(new Bubble(e.offsetX, e.offsetY, /*Math.random() * 10 + 10*/ 20))
+        else if (!walls[walls.length - 1].done && !keys.KeyD){
+            walls[walls.length - 1].w = e.offsetX - walls[walls.length - 1].x
+            walls[walls.length - 1].h = e.offsetY - walls[walls.length - 1].y
+        }
+        else {
+            for(let i in bubbles){
+                if(distance({x:e.offsetX, y:e.offsetY}, bubbles[i]).c < 50)
+                    bubbles.splice(i, 1)
+            }
+        }
+    })
+    addEventListener("mouseup", e => {
+        hold = false
+    })
+    addEventListener("wheel", e => {
+        // dolu
+        if (e.deltaY > 0) {
+            if(keys["ArrowUp"])
+                screen.y += 20
+            if(keys["ArrowDown"])
+                screen.y2 += 20
+            if(keys["ArrowLeft"])
+                screen.x += 20
+            if(keys["ArrowRight"])
+                screen.x2 += 20
+        }
+        //nahoru
+        if (e.deltaY < 0) {
+            if(keys["ArrowUp"])
+                screen.y -= 20
+            if(keys["ArrowDown"])
+                screen.y2 -= 20
+            if(keys["ArrowLeft"])
+                screen.x -= 20
+            if(keys["ArrowRight"])
+                screen.x2 -= 20
+
+        }
+    })
+    addEventListener("keydown", e => {
+        keys[e.code] = true
+        if (e.code == "KeyS") {
+            sh_stats = !sh_stats
+        }
+    })
+    addEventListener("keyup", e => {
+        keys[e.code] = false
+    })
+</script>
+
+</html>
