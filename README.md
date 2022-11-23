@@ -8,6 +8,8 @@ if I remember correctly the controls are as follows:
   
   press S - enable/disable statistics
   
+  hold arrow + scroll - resize outer walls
+  
 
 
 But most importantly, have fun!
