@@ -10,6 +10,6 @@ if I remember correctly the controls are as follows:
   
 
 
-But the most important thing is to have fun.
+But most importantly, have fun!
 
 (I am not responsible for any bubble addicts that may or may not appear in the near future.)
